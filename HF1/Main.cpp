@@ -2,7 +2,16 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <random>
+#include "bevgrafmath2017.h"
+#include "BSpline.h"
+
 #define GLFW_DLL
+
+BSpline* spline = new BSpline(10);
+GLFWcursor* handCursor = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+double mouseX;
+double mouseY;
 
 void error_callback(int error, const char* description)
 {
@@ -15,53 +24,123 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
 
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
+{
+	mouseX = xpos;
+	mouseY = ypos;
+	glfwSetCursor(window, NULL);
+	if (spline->MouseOverPoint(xpos, ypos))
+	{
+		glfwSetCursor(window, handCursor);
+	}
+	if (spline->grabbedPoint != nullptr)
+	{
+		spline->MoveGrabbedPoint(xpos,ypos);
+	}
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+	std::cout << "Clicked on x:" << mouseX << " y:" << mouseY << std::endl;
+
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+	{
+		spline->grabbedPoint = nullptr;
+		if (!spline->MouseOverPoint(mouseX, mouseY))
+			spline->AddPoint(mouseX, mouseY);
+	}
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	{
+		if (spline->MouseOverPoint(mouseX, mouseY))
+			spline->SetGrabbedPoint(mouseX, mouseY);
+	}
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE)
+	{
+		spline->RemovePoint(mouseX, mouseY);
+	}
+}
+
 int main(void)
 {
-    GLFWwindow* window;
 
-    char WindowTitle[] = "Aww shit, here we go again...";
-    int WindowWidth = 800;
-    int WindowHeight = 600;
+#pragma region GLFWSETUP
 
-    glfwSetErrorCallback(error_callback);
+	GLFWwindow* window;
 
-    if (!glfwInit())
-        exit(EXIT_FAILURE);
+	char WindowTitle[] = "Aww shit, here we go again...";
+	int WindowWidth = 800;
+	int WindowHeight = 600;
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+	if (!glfwInit())
+		exit(EXIT_FAILURE);
 
-    window = glfwCreateWindow(WindowWidth, WindowHeight, WindowTitle, NULL, NULL);
-    if (!window)
-    {
-        glfwTerminate();
-        exit(EXIT_FAILURE);
-    }
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    glfwSetKeyCallback(window, key_callback);
+	window = glfwCreateWindow(WindowWidth, WindowHeight, WindowTitle, NULL, NULL);
+	if (!window)
+	{
+		glfwTerminate();
+		exit(EXIT_FAILURE);
+	}
 
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	glfwSetKeyCallback(window, key_callback);
+	glfwSetErrorCallback(error_callback);
+	glfwSetCursorPosCallback(window, cursor_position_callback);
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
 
-    glClearColor(1,1,1,1);
+	glfwMakeContextCurrent(window);
+	glfwSwapInterval(1);
 
-    while (!glfwWindowShouldClose(window))
-    {
-        float ratio;
-        int width, height;
+#pragma endregion
 
-        glfwGetFramebufferSize(window, &width, &height);
-        ratio = width / (float)height;
+	std::mt19937_64 generator;
+	std::uniform_real_distribution<float> distribution(0, 1);
 
-        glViewport(0, 0, width, height);
-        glClear(GL_COLOR_BUFFER_BIT);
+	//float roll[3] = { distribution(generator),distribution(generator),distribution(generator) };
+	float roll[3] = { 0,0,0 };
+	int rollNum = 0;
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(0, WindowWidth, WindowHeight, 0, -1, 1);
+	glEnable(GL_POINT_SMOOTH);
+	glShadeModel(GL_FLAT);
+	glClearColor(1, 1, 1, 1);
 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
+	while (!glfwWindowShouldClose(window))
+	{
+		glfwGetFramebufferSize(window, &WindowWidth, &WindowHeight);
+		glClear(GL_COLOR_BUFFER_BIT);
 
-    glfwDestroyWindow(window);
+#pragma region Disco_Region
+		if (roll[rollNum] <= 1)
+		{
+			roll[rollNum] = roll[rollNum] + 0.10f;
+			roll[(rollNum - 1) % 3] = roll[(rollNum - 1) % 3] - 0.10f;
+		}
+		else
+			rollNum++;
 
-    glfwTerminate();
-    exit(EXIT_SUCCESS);
+		if (roll[2] > 1)
+		{
+			for (int i = 0; i < 3; i++)
+			{
+				roll[i] = 0;
+			}
+			rollNum = 0;
+		}
+		glColor3f(roll[0], roll[1], roll[2]);
+#pragma endregion
+
+		spline->DrawPoints();
+		spline->DrawSpline(3);
+
+		glfwSwapBuffers(window);
+		glfwPollEvents();
+	}
+
+	glfwDestroyWindow(window);
+	glfwTerminate();
+	exit(EXIT_SUCCESS);
 }
